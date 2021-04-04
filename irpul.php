@@ -77,7 +77,7 @@
 			}
 			$decrypted = base64_decode($data);
 			
-			$check = array('tran_id','order_id','amount','refcode','status');
+			$check = array('trans_id','order_id','amount','refcode','status');
 			foreach($check as $str){
 				str_replace($str,'',$decrypted,$count);
 				if($count > 0){
@@ -96,7 +96,7 @@
 			$decrypted 		= url_decrypt( $irpul_token );
 			if($decrypted['status']){
 				parse_str($decrypted['data'], $ir_output);
-				$tran_id 	= $ir_output['tran_id'];
+				$trans_id 	= $ir_output['trans_id'];
 				$res_num 	= $ir_output['order_id'];
 				$amount 	= $ir_output['amount'];
 				$refcode	= $ir_output['refcode'];
@@ -108,7 +108,7 @@
 					$amount		= round($payment[payment_amount]);
 					$parameters = array(
 						'method' 	    => 'verify',
-						'trans_id' 		=> $tran_id,
+						'trans_id' 		=> $trans_id,
 						'amount'	 	=> $amount,
 					);
 					
@@ -125,7 +125,7 @@
 								if ($payment[payment_status] == 1){
 									$output[status] = 1;
 									$output[res_num] = $res_num;
-									$output[tran_id] = $tran_id;
+									$output[trans_id] = $trans_id;
 									$output[payment_id] = $payment[payment_id];
 
 								}
