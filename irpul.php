@@ -68,108 +68,75 @@
 		global $db,$get,$smarty;
 		$token = $data[pin];
 		
-		function url_decrypt($string){
-			$counter = 0;
-			$data = str_replace(array('-','_','.'),array('+','/','='),$string);
-			$mod4 = strlen($data) % 4;
-			if ($mod4) {
-			$data .= substr('====', $mod4);
-			}
-			$decrypted = base64_decode($data);
+		if( isset($_POST['trans_id']) && isset($_POST['order_id']) && isset($_POST['amount']) && isset($_POST['refcode']) && isset($_POST['status']) ){
+			$trans_id 	= $_POST['trans_id'];
+			$res_num 	= $_POST['order_id'];
+			$amount 	= $_POST['amount'];
+			$refcode	= $_POST['refcode'];
+			$status 	= $_POST['status'];
 			
-			$check = array('trans_id','order_id','amount','refcode','status');
-			foreach($check as $str){
-				str_replace($str,'',$decrypted,$count);
-				if($count > 0){
-					$counter++;
-				}
-			}
-			if($counter === 5){
-				return array('data'=>$decrypted , 'status'=>true);
-			}else{
-				return array('data'=>'' , 'status'=>false);
-			}
-		}
-		
-		if( isset($_GET['irpul_token']) ){
-			$irpul_token 	= $_GET['irpul_token'];
-			$decrypted 		= url_decrypt( $irpul_token );
-			if($decrypted['status']){
-				parse_str($decrypted['data'], $ir_output);
-				$trans_id 	= $ir_output['trans_id'];
-				$res_num 	= $ir_output['order_id'];
-				$amount 	= $ir_output['amount'];
-				$refcode	= $ir_output['refcode'];
-				$status 	= $ir_output['status'];
-				
-				if($status == 'paid'){
-					$sql = 'SELECT * FROM payment WHERE payment_rand = "'.$res_num.'" LIMIT 1;';
-					$payment 	= $db->query($sql)->fetch();
-					$amount		= round($payment[payment_amount]);
-					$parameters = array(
-						'method' 	    => 'verify',
-						'trans_id' 		=> $trans_id,
-						'amount'	 	=> $amount,
-					);
-					
-					$result =  post_data('https://irpul.ir/ws.php', $parameters, $token );
+			if($status == 'paid'){
+				$sql = 'SELECT * FROM payment WHERE payment_rand = "'.$res_num.'" LIMIT 1;';
+				$payment = $db->query($sql)->fetch();
+				if ($payment){
+					if ($payment[payment_status] == 1){
+						$amount		= round($payment[payment_amount]);
+						
+						$parameters = array(
+							'method' 	    => 'verify',
+							'trans_id' 		=> $trans_id,
+							'amount'	 	=> $amount,
+						);
+						
+						$result =  post_data('https://irpul.ir/ws.php', $parameters, $token );
 
-					if( isset($result['http_code']) ){
-						$data =  json_decode($result['data'],true);
+						if( isset($result['http_code']) ){
+							$data =  json_decode($result['data'],true);
 
-						if( isset($data['code']) && $data['code'] === 1){
-							//echo "transaction paid. refcode :" .$refcode;
-							$sql 		= 'SELECT * FROM payment WHERE payment_rand = "'.$res_num.'" LIMIT 1;';
-							$payment 	= $db->query($sql)->fetch();
-							if ($payment){
-								if ($payment[payment_status] == 1){
+							if( isset($data['code']) && $data['code'] === 1){
+								$irpul_amount  = $data['amount'];
+
+								if($amount == $irpul_amount){
+									//paid
 									$output[status] = 1;
 									$output[res_num] = $res_num;
 									$output[trans_id] = $trans_id;
 									$output[payment_id] = $payment[payment_id];
-
 								}
 								else{
 									$output[status]	= 0;
-									$output[message]= 'چنین سفارشی تعریف نشده است.';
+									$output[message] = 'مبلغ تراکنش در ایرپول (' . number_format($irpul_amount) . ' تومان) تومان با مبلغ تراکنش در سیمانت (' . number_format($amount) . ' تومان) برابر نیست';
 								}
 							}
 							else{
 								$output[status]	= 0;
-								$output[message]= 'اطلاعات پرداخت کامل نیست.';
+								$output[message]= 'خطا در پرداخت. کد خطا: ' . $data['code'] . '<br/>' . $data['status'];
 							}
-						}
-						else{
+							
+						}else{
 							$output[status]	= 0;
-							$output[message]= 'خطا در پرداخت. کد خطا: ' . $data['code'] . '<br/>' . $data['status'];
+							$output[message]= 'پاسخی از سرویس دهنده دریافت نشد. لطفا دوباره تلاش نمائید';
 						}
-						
-					}else{
-						$output[status]	= 0;
-						$output[message]= 'پاسخی از سرویس دهنده دریافت نشد. لطفا دوباره تلاش نمائید';
 					}
-					
-					/*$result=intval($result);
-					if($result == 1){*/
-						
-					/*}
 					else{
 						$output[status]	= 0;
-						$output[message]= 'پرداخت موفقيت آميز نبود';
-					}*/
-				}else{
-					$output[status]	= 0;
-					$output[message]= 'تراکنش پرداخت نشده است !';
+						$output[message]= 'چنین سفارشی تعریف نشده است.';
+					}
 				}
-			}
-			else{
+				else{
+					$output[status]	= 0;
+					$output[message]= 'اطلاعات پرداخت کامل نیست.';
+				}
+			}else{
 				$output[status]	= 0;
-				$output[message]= 'توکن ایرپول صحیح نیست !';
+				$output[message]= 'تراکنش پرداخت نشده است !';
 			}
-		}else{
-			$output[status]	= 0;
-			$output[message]= 'توکن ایرپول موجود نیست !';
 		}
+		else{
+			$output[status]	= 0;
+			$output[message]= "undefined callback parameters";
+		}
+
 		return $output;
 	}
 
